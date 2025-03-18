@@ -57,6 +57,16 @@ jobs:
             ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} \
             "mkdir -p $DEPLOY_PATH"
 
+      # Очистка старых файлов на сервере
+      - name: Clean up old files on server
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} "
+            cd $DEPLOY_PATH
+            rm -f image.tar .env docker-compose.yml nginx.shield.conf prometheus.yml loki-config.yaml promtail-config.yaml
+            echo 'Old files cleaned up.'
+          "
+
       # Копирование файлов на сервер
       - name: Deploy to server
         run: |
@@ -67,7 +77,6 @@ jobs:
             nginx.shield.conf \
             prometheus.yml \
             loki-config.yaml \
-            grafana \
             promtail-config.yaml \
             ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }}:$DEPLOY_PATH/
 
