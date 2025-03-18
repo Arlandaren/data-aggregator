@@ -14,8 +14,6 @@ env:
   SERVER_USER: root
 
 jobs:
-
-
   build_and_deploy:
     runs-on: ubuntu-latest
 
@@ -48,7 +46,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY_BASE64 }}" | base64 --decode > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-agent sh -c "ssh-add ~/.ssh/id_rsa"
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
           ssh-keyscan -H ${{ env.SERVER_DOMAIN }} >> ~/.ssh/known_hosts
 
       # Создание удаленной директории, если она не существует
@@ -65,13 +64,18 @@ jobs:
             image.tar \
             .env \
             docker-compose.yml \
+            nginx.shield.conf \
+            prometheus.yml \
+            loki-config.yaml \
+            grafana \
+            promtail-config.yaml \
             ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }}:$DEPLOY_PATH/
 
       # Загрузка Docker-образа и запуск контейнеров
       - name: Load Docker image and start containers
         run: |
           ssh -o StrictHostKeyChecking=no \
-            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} -p 22 "
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} "
             if ! command -v docker &> /dev/null; then
               echo 'Docker is not installed!'
               exit 1
