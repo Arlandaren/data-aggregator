@@ -64,7 +64,7 @@ jobs:
           scp -v -r -o StrictHostKeyChecking=no \
             image.tar \
             .env \
-            docker-compose.yaml \
+            docker-compose.yml \
             ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }}:$DEPLOY_PATH/
 
       # Загрузка Docker-образа и запуск контейнеров
