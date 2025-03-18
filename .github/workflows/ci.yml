@@ -1,0 +1,102 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  DEPLOY_PATH: /home/app
+  SERVER_DOMAIN: 45.153.68.43
+  SERVER_USER: root
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Set up Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23.6'
+
+      # Install and run golangci-lint
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54.2
+
+      # Run golangci-lint
+      - name: Run golangci-lint
+        run: golangci-lint run ./...
+
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v3
+
+      # Установка Docker и логин в Docker Hub
+      - uses: docker/setup-buildx-action@v2
+      - uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # Создание .env из секрета
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE_BASE64 }}" | base64 --decode > .env
+
+      # Сборка Docker-образа
+      - name: Build Docker image
+        run: docker compose --env-file=.env build
+
+      # Сохранение Docker-образа в tar-файл
+      - name: Save Docker image
+        run: docker save -o image.tar bot_app:latest
+
+      # Настройка SSH ключа
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_BASE64 }}" | base64 --decode > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-agent sh -c "ssh-add ~/.ssh/id_rsa"
+          ssh-keyscan -H ${{ env.SERVER_DOMAIN }} >> ~/.ssh/known_hosts
+
+      # Создание удаленной директории, если она не существует
+      - name: Create remote directory if it doesn't exist
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} \
+            "mkdir -p $DEPLOY_PATH"
+
+      # Копирование файлов на сервер
+      - name: Deploy to server
+        run: |
+          scp -v -r -o StrictHostKeyChecking=no \
+            image.tar \
+            .env \
+            docker-compose.yaml \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }}:$DEPLOY_PATH/
+
+      # Загрузка Docker-образа и запуск контейнеров
+      - name: Load Docker image and start containers
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} -p 22 "
+            if ! command -v docker &> /dev/null; then
+              echo 'Docker is not installed!'
+              exit 1
+            fi
+            cd $DEPLOY_PATH
+            docker load -i image.tar || { echo 'Failed to load Docker image'; exit 1; }
+            docker compose --env-file=.env up -d || { echo 'Failed to start containers'; exit 1; }
+            echo 'Deployed!'
+          "
