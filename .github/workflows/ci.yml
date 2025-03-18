@@ -14,6 +14,8 @@ env:
   SERVER_USER: root
 
 jobs:
+
+
   build_and_deploy:
     runs-on: ubuntu-latest
 
@@ -36,14 +38,6 @@ jobs:
       - name: Build Docker image
         run: docker compose --env-file=.env build
 
-      # Проверка существования образа
-      - name: Check if Docker image exists
-        run: |
-          if ! docker image inspect app_server:latest &> /dev/null; then
-            echo "Error: Docker image 'app_server:latest' not found!"
-            exit 1
-          fi
-
       # Сохранение Docker-образа в tar-файл
       - name: Save Docker image
         run: docker save -o image.tar app_server:latest
@@ -54,8 +48,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY_BASE64 }}" | base64 --decode > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          eval "$(ssh-agent -s)"
-          ssh-add ~/.ssh/id_rsa
+          ssh-agent sh -c "ssh-add ~/.ssh/id_rsa"
           ssh-keyscan -H ${{ env.SERVER_DOMAIN }} >> ~/.ssh/known_hosts
 
       # Создание удаленной директории, если она не существует
@@ -68,55 +61,23 @@ jobs:
       # Копирование файлов на сервер
       - name: Deploy to server
         run: |
-          scp -v -r -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          scp -v -r -o StrictHostKeyChecking=no \
             image.tar \
             .env \
             docker-compose.yaml \
             ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }}:$DEPLOY_PATH/
 
-      # Проверка успешности копирования файлов
-      - name: Verify files on server
-        run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} "
-            if [ ! -f $DEPLOY_PATH/image.tar ]; then
-              echo 'Error: image.tar not found on server!'
-              exit 1
-            fi
-            if [ ! -f $DEPLOY_PATH/.env ]; then
-              echo 'Error: .env not found on server!'
-              exit 1
-            fi
-            if [ ! -f $DEPLOY_PATH/docker-compose.yaml ]; then
-              echo 'Error: docker-compose.yaml not found on server!'
-              exit 1
-            fi
-            echo 'All files are present on the server.'
-          "
-
       # Загрузка Docker-образа и запуск контейнеров
       - name: Load Docker image and start containers
         run: |
           ssh -o StrictHostKeyChecking=no \
-            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} "
+            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} -p 22 "
             if ! command -v docker &> /dev/null; then
-              echo 'Error: Docker is not installed!'
+              echo 'Docker is not installed!'
               exit 1
             fi
             cd $DEPLOY_PATH
-            echo 'Loading Docker image...'
-            docker load -i image.tar || { echo 'Error: Failed to load Docker image'; exit 1; }
-            echo 'Starting containers...'
-            docker compose --env-file=.env up -d || { echo 'Error: Failed to start containers'; exit 1; }
-            echo 'Deployed successfully!'
-          "
-
-      # Очистка временных файлов на сервере
-      - name: Clean up server
-        run: |
-          ssh -o StrictHostKeyChecking=no \
-            ${{ env.SERVER_USER }}@${{ env.SERVER_DOMAIN }} "
-            cd $DEPLOY_PATH
-            rm -f image.tar
-            echo 'Cleanup completed.'
+            docker load -i image.tar || { echo 'Failed to load Docker image'; exit 1; }
+            docker compose --env-file=.env up -d || { echo 'Failed to start containers'; exit 1; }
+            echo 'Deployed!'
           "
