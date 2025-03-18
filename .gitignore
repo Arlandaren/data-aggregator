@@ -38,3 +38,6 @@ minio-data/
 
 **/myenv/
 **/myenv/*
+
+**/ssh/
+**/ssh/*
