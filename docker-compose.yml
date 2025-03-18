@@ -45,6 +45,7 @@ services:
       loki: 'true'
 
   app_service:
+    image: app_server:latest
     build: .
     environment:
       - PG_STRING=${PG_STRING}
