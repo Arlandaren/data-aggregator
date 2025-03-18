@@ -40,7 +40,7 @@ jobs:
 
       # Сохранение Docker-образа в tar-файл
       - name: Save Docker image
-        run: docker save -o image.tar bot_app:latest
+        run: docker save -o image.tar app_server:latest
 
       # Настройка SSH ключа
       - name: Setup SSH key
