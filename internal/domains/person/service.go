@@ -1,6 +1,7 @@
 package person
 
 import (
+	"bufio"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -21,17 +22,55 @@ func NewService(repo *Repository) *Service {
 	}
 }
 
+// detectDelimiter определяет разделитель в CSV-файле
+func detectDelimiter(firstLine string) rune {
+	delimiters := []rune{',', ';', '\t', '|'} // Возможные разделители
+	maxCount := 0
+	detectedDelimiter := ','
+
+	for _, delimiter := range delimiters {
+		count := strings.Count(firstLine, string(delimiter))
+		if count > maxCount {
+			maxCount = count
+			detectedDelimiter = delimiter
+		}
+	}
+
+	return detectedDelimiter
+}
+
 func (s *Service) ParseAndSaveCSV(ctx context.Context, file io.Reader) error {
-	reader := csv.NewReader(file)
-	reader.Comma = ','
-	reader.FieldsPerRecord = -1 // Разрешаем разное количество полей в строках
+	// Use bufio.Reader to read the file
+	bufReader := bufio.NewReader(file)
+
+	// Peek the first 4096 bytes without advancing the reader
+	peekBytes, err := bufReader.Peek(4096)
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("failed to peek into the CSV file: %w", err)
+	}
+
+	// Convert peeked bytes to string and split by newline to get the first line
+	peekStr := string(peekBytes)
+	lines := strings.SplitN(peekStr, "\n", 2)
+	if len(lines) == 0 {
+		return fmt.Errorf("empty CSV file")
+	}
+	firstLine := lines[0]
+
+	// Detect the delimiter
+	delimiter := detectDelimiter(firstLine)
+	fmt.Printf("Detected delimiter: %q\n", delimiter)
+
+	// Create CSV reader with the detected delimiter
+	reader := csv.NewReader(bufReader)
+	reader.Comma = delimiter
+	reader.FieldsPerRecord = -1 // Allow variable number of fields per record
 
 	// Читаем заголовки
 	headers, err := reader.Read()
 	if err != nil {
 		return fmt.Errorf("failed to read headers: %w", err)
 	}
-	fmt.Println(headers)
 
 	// Создаем мапу для хранения индексов столбцов
 	columnIndexes := make(map[string]int)
@@ -69,6 +108,7 @@ func (s *Service) ParseAndSaveCSV(ctx context.Context, file io.Reader) error {
 
 	// Обрабатываем каждую запись
 	for _, record := range records {
+		fmt.Println(record)
 		person := models.Person{
 			Fio:       getValueFromRecord(record, columnIndexes, "Fio"),
 			Phone:     getValueFromRecord(record, columnIndexes, "Phone"),
@@ -169,4 +209,8 @@ func (s *Service) ParseAndSaveJSON(ctx context.Context, file io.Reader) error {
 
 func (s *Service) FindPerson(ctx context.Context, field, value string) ([]models.Person, error) {
 	return s.repo.FindPerson(ctx, field, value)
+}
+
+func (s *Service) ListPersons(ctx context.Context) ([]models.Person, error) {
+	return s.repo.GetAllPersons(ctx)
 }

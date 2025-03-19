@@ -5,7 +5,7 @@ CREATE TABLE persons (
                         snils TEXT,
                         inn TEXT,
                         passport TEXT,
-                        birth_date DATE,
+                        birth_date TEXT,
                         address TEXT
 );
 ALTER TABLE persons ADD CONSTRAINT unique_person UNIQUE (fio, phone, snils, inn, passport, birth_date, address);

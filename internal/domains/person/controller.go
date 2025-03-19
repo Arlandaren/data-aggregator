@@ -20,6 +20,7 @@ func (c *Controller) Endpoints(r *gin.Engine) {
 	r.POST("/person/upload/json", c.UploadJSON)
 	r.GET("/person/find", c.FindPerson)
 	r.POST("/person/upload/ai/csv", c.UploadCSVWithAi)
+	r.GET("/persons", c.ListPersons)
 }
 
 func (c *Controller) UploadCSV(ctx *gin.Context) {
@@ -80,6 +81,16 @@ func (c *Controller) FindPerson(ctx *gin.Context) {
 	}
 
 	persons, err := c.svc.FindPerson(ctx.Request.Context(), field, value)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"persons": persons})
+}
+
+func (c *Controller) ListPersons(ctx *gin.Context) {
+	persons, err := c.svc.ListPersons(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

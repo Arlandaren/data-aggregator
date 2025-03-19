@@ -23,7 +23,6 @@ func NewRepository(db *postgres.Wrapper, rdb *redis.RDB) *Repository {
 }
 
 func (r *Repository) SavePerson(ctx context.Context, person models.Person) error {
-	log.Println(person)
 	query := `
         INSERT INTO persons (fio, phone, snils, inn, passport, birth_date,address)
         VALUES ($1, $2, $3, $4, $5, $6,$7)
@@ -40,27 +39,6 @@ func (r *Repository) SavePerson(ctx context.Context, person models.Person) error
 	}
 	return nil
 }
-
-//func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]models.Person, error) {
-//	var persons []models.Person
-//
-//	textFields := []string{"fio", "phone", "snils", "inn", "passport", "address"}
-//	var conditions []string
-//	for _, f := range textFields {
-//		conditions = append(conditions, fmt.Sprintf("%s ILIKE $1", f))
-//	}
-//	conditions = append(conditions, "to_char(birth_date, 'YYYY-MM-DD') ILIKE $1")
-//
-//	query := fmt.Sprintf("SELECT id, fio, phone, snils, inn, passport, birth_date, address FROM persons WHERE %s", strings.Join(conditions, " OR "))
-//
-//	finalQuery := strings.ReplaceAll(query, "$1", "'%"+value+"%'")
-//	fmt.Println("Final query:", finalQuery)
-//	if err := r.db.Select(ctx, &persons, query, "%"+value+"%"); err != nil {
-//		return nil, fmt.Errorf("failed to query persons: %w", err)
-//	}
-//
-//	return persons, nil
-//}
 
 func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]models.Person, error) {
 	var persons []models.Person
@@ -103,10 +81,10 @@ func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]mod
                     snils,
                     inn,
                     passport,
-                    to_char(birth_date, 'YYYY-MM-DD') as birth_date,
+                    birth_date,
                     address
                 FROM persons
-                WHERE to_char(birth_date, 'YYYY-MM-DD') ILIKE $1`
+                WHERE birth_date ILIKE $1`
 		} else {
 			query = fmt.Sprintf(`
                 SELECT
@@ -116,7 +94,7 @@ func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]mod
                     snils,
                     inn,
                     passport,
-                    to_char(birth_date, 'YYYY-MM-DD') as birth_date,
+                    birth_date,
                     address
                 FROM persons
                 WHERE %s ILIKE $1`, field)
@@ -131,7 +109,7 @@ func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]mod
 			"inn ILIKE $1",
 			"passport ILIKE $1",
 			"address ILIKE $1",
-			"to_char(birth_date, 'YYYY-MM-DD') ILIKE $1",
+			"birth_date ILIKE $1",
 		}
 
 		query = fmt.Sprintf(`
@@ -142,7 +120,7 @@ func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]mod
                 snils,
                 inn,
                 passport,
-                 COALESCE(to_char(birth_date, 'YYYY-MM-DD'), '') as birth_date,
+			 	COALESCE(birth_date, '') as birth_date,
                 address
             FROM persons
             WHERE %s`, strings.Join(conditions, " OR "))
@@ -163,5 +141,13 @@ func (r *Repository) FindPerson(ctx context.Context, field, value string) ([]mod
 		log.Printf("Person: %+v", p)
 	}
 
+	return persons, nil
+}
+
+func (r *Repository) GetAllPersons(ctx context.Context) ([]models.Person, error) {
+	var persons []models.Person
+	if err := r.db.Select(ctx, &persons, "SELECT id, fio, phone, snils, inn, passport, COALESCE(birth_date, '') as birth_date , address FROM persons"); err != nil {
+		return nil, fmt.Errorf("failed to query persons: %w", err)
+	}
 	return persons, nil
 }
