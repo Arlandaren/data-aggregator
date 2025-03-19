@@ -151,3 +151,8 @@ func (r *Repository) GetAllPersons(ctx context.Context) ([]models.Person, error)
 	}
 	return persons, nil
 }
+
+func (r *Repository) ExecuteSQL(ctx context.Context, sqlStatements string) error {
+	_, err := r.db.Pool.Exec(ctx, sqlStatements)
+	return err
+}
